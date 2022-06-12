@@ -11,7 +11,7 @@ use crate::{
 
 pub struct Org<'a> {
     pub(crate) arena: Arena<Element<'a>>,
-    pub root: NodeId,
+    pub(crate) root: NodeId,
 }
 
 #[derive(Debug)]
@@ -78,6 +78,10 @@ impl<'a> Org<'a> {
         org.debug_validate();
 
         org
+    }
+    
+    pub fn root(&self) -> NodeId {
+        self.root
     }
 
     /// Returns a reference to the underlay arena.
