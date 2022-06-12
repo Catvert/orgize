@@ -11,7 +11,7 @@ use crate::{
 
 pub struct Org<'a> {
     pub(crate) arena: Arena<Element<'a>>,
-    pub(crate) root: NodeId,
+    pub root: NodeId,
 }
 
 #[derive(Debug)]
