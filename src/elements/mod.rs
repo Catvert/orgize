@@ -49,7 +49,7 @@ pub use self::{
     snippet::Snippet,
     table::{Table, TableCell, TableRow},
     target::Target,
-    timestamp::{Datetime, Timestamp},
+    timestamp::{Datetime, Delay, DelayMark, Repeater, RepeaterMark, TimeUnit, Timestamp},
     title::{PropertiesMap, Title},
 };
 
