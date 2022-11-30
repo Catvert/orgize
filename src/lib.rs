@@ -227,7 +227,7 @@ pub mod export;
 mod headline;
 mod org;
 mod parse;
-mod parsers;
+pub mod parsers;
 mod validate;
 
 // Re-export of the indextree crate.
