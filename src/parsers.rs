@@ -1,7 +1,7 @@
 use std::iter::once;
 use std::marker::PhantomData;
 
-use indextree::{Arena, NodeId};
+use indextree::{Arena, NodeId, Node, Children};
 use jetscii::{bytes, BytesConst};
 use memchr::{memchr, memchr_iter};
 use nom::bytes::complete::take_while1;
@@ -19,23 +19,43 @@ pub trait ElementArena<'a> {
     fn append<T>(&mut self, element: T, parent: NodeId) -> NodeId
     where
         T: Into<Element<'a>>;
+
+    fn insert_after<T>(&mut self, element: T, after: NodeId) -> NodeId
+    where
+        T: Into<Element<'a>>;
+
     fn insert_before_last_child<T>(&mut self, element: T, parent: NodeId) -> NodeId
     where
         T: Into<Element<'a>>;
+
     fn set<T>(&mut self, node: NodeId, element: T)
     where
         T: Into<Element<'a>>;
+
+    fn get(&self, node: NodeId) -> &Node<Element<'a>>;
+
+
+    fn arena(&self) -> &Arena<Element<'a>>;
 }
 
 pub type BorrowedArena<'a> = Arena<Element<'a>>;
 
-impl<'a> ElementArena<'a> for BorrowedArena<'a> {
+impl<'a> ElementArena<'a> for Arena<Element<'a>> {
     fn append<T>(&mut self, element: T, parent: NodeId) -> NodeId
     where
         T: Into<Element<'a>>,
     {
         let node = self.new_node(element.into());
         parent.append(node, self);
+        node
+    }
+
+    fn insert_after<T>(&mut self, element: T, after: NodeId) -> NodeId
+    where
+        T: Into<Element<'a>>,
+    {
+        let node = self.new_node(element.into());
+        after.insert_after(node, self);
         node
     }
 
@@ -58,6 +78,16 @@ impl<'a> ElementArena<'a> for BorrowedArena<'a> {
     {
         *self[node].get_mut() = element.into();
     }
+
+    fn get(&self, node: NodeId) -> &Node<Element<'a>> {
+        &self[node]
+    }
+
+    fn arena(&self) -> &Arena<Element<'a>> {
+        &self
+    }
+
+
 }
 
 pub struct OwnedArena<'a, 'b, 'c> {
@@ -82,6 +112,13 @@ impl<'a> ElementArena<'a> for OwnedArena<'a, '_, '_> {
         self.arena.append(element.into().into_owned(), parent)
     }
 
+    fn insert_after<T>(&mut self, element: T, after: NodeId) -> NodeId
+    where
+        T: Into<Element<'a>>,
+    {
+        self.arena.insert_after(element.into().into_owned(), after)
+    }
+
     fn insert_before_last_child<T>(&mut self, element: T, parent: NodeId) -> NodeId
     where
         T: Into<Element<'a>>,
@@ -95,6 +132,15 @@ impl<'a> ElementArena<'a> for OwnedArena<'a, '_, '_> {
         T: Into<Element<'a>>,
     {
         self.arena.set(node, element.into().into_owned());
+    }
+
+    fn get(&self, node: NodeId) -> &Node<Element<'a>>
+    {
+        &self.arena[node]
+    }
+
+    fn arena(&self) -> &Arena<Element<'a>> {
+        &self.arena
     }
 }
 
@@ -122,6 +168,41 @@ pub fn parse_container<'a, T: ElementArena<'a>>(
             Container::Document { content, node } => {
                 parse_section_and_headlines(arena, content, node, containers);
             }
+            Container::Headline { content, node } => {
+                parse_headline_content(arena, content, node, containers, config);
+            }
+            Container::Block { content, node } => {
+                parse_blocks(arena, content, node, containers);
+            }
+            Container::Inline { content, node } => {
+                parse_inlines(arena, content, node, containers);
+            }
+        }
+    }
+}
+
+pub fn parse_headline_after<'a, T: ElementArena<'a>>(
+    arena: &mut T,
+    content: &'a str,
+    parent: NodeId,
+    after_headline: usize,
+    config: &ParseConfig,
+) {
+    let headline_id = parent.children(arena.arena()).filter(|f| match arena.get(*f).get() {
+        Element::Headline { level } => true,
+        _ => false
+    }).nth(after_headline).unwrap();
+
+    let containers = &mut vec![];
+
+    let (tail, (title, content)) = Title::parse(content, config).unwrap();
+    let node = arena.insert_after(title, headline_id);
+    containers.push(Container::Inline { content, node });
+    parse_section_and_headlines(arena, tail, headline_id, containers);
+
+    while let Some(container) = containers.pop() {
+        match container {
+            Container::Document { .. } => unreachable!(),
             Container::Headline { content, node } => {
                 parse_headline_content(arena, content, node, containers, config);
             }
